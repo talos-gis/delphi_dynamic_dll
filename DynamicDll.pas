@@ -161,7 +161,7 @@ type
     property AutoLoad : Boolean read FAutoLoad write FAutoLoad default True;
     property AutoUnload : Boolean read FAutoUnload write FAutoUnload default True;
     property DllName : String read GetDllName write SetDllName stored IsDllNameStored;
-    property DllPath : String read FDllPath write SetDllPath;
+    property DllPath : String read GetDllPath write SetDllPath;
     property DllFullFileName : String read GetDllFullFileName;
     property APIVersion : Integer read FAPIVersion write FAPIVersion stored IsAPIVersionStored;
     property RegVersion : String read FRegVersion write FRegVersion stored IsRegVersionStored;
@@ -212,9 +212,7 @@ end;
 
 function  TDynamicDll.GetDllPath : String;
 begin
-  Result := DllPath;
-  if Result <> '' then
-    Result := IncludeTrailingPathDelimiter(Result);
+  Result := FDllPath;
 end;
 
 procedure  TDynamicDll.OpenDll(const aDllName : String);
@@ -390,7 +388,10 @@ end;
 
 procedure TDynamicDll.SetDllPath(const Value: String);
 begin
-  FDllPath := Value;
+  if Value='' then
+    FDllPath := ''
+  else
+    FDllPath := IncludeTrailingPathDelimiter(Value);
 end;
 
 procedure TDynamicDll.CallMapDll;

@@ -7,22 +7,25 @@ uses
 
 type
   TDynamicDLLWithVersion = class(TDynamicDLL)
-  public
+  protected
+    DLL_VersionsSupported: TList;
+    DLL_VersionsSpeculated: TList;
+    DLL_VersionsFallback: TList;
     DLL_Base_Name: String;
-    DLL_Version: Integer;
-    DLL_VersionMin: Integer;
-    DLL_VersionMax: Integer;
-    DLL_VersionMax_LowDependencies: Integer;
     DLL_Version_MajorMod: Integer;
+  public
+    DLL_Version: Integer;
+    PrefereFallback: Boolean;
     IsEssential: Boolean;
     constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
     function LoadDll: Boolean; override;
+    function LoadDllByVersion(Versions: TList): Boolean;
     function GetDLL_Version_Major(v: Integer): Integer; virtual;
     function GetDLL_Version_Minor(v: Integer): Integer; virtual;
   protected
     procedure BeforeLoad; override;
     function ResolvePaths: Boolean; virtual;
-    function GetDllName: String; override;
     function GetDllNameByVersion(v: Integer): String; virtual;
   end;
 
@@ -35,18 +38,20 @@ begin
   inherited;
   DLL_Base_Name := '';
   DLL_Version := 0;
-  DLL_VersionMin := 0;
-  DLL_VersionMax := 0;
-  DLL_VersionMax_LowDependencies := 0;
+  DLL_VersionsSupported := TList.Create;
+  DLL_VersionsSpeculated := TList.Create;
+  DLL_VersionsFallback := TList.Create;
+  PrefereFallback := False;
   DLL_Version_MajorMod := 100;
   IsEssential := True;
 end;
 
-function TDynamicDLLWithVersion.GetDllName: String;
+destructor TDynamicDLLWithVersion.Destroy;
 begin
-  Result := inherited;
-  if (Result='') and (DLL_Version <> 0) then
-    Result := GetDllNameByVersion(DLL_Version);
+  DLL_VersionsSpeculated.Free;
+  DLL_VersionsSupported.Free;
+  DLL_VersionsFallback.Free;
+  inherited;
 end;
 
 function TDynamicDLLWithVersion.GetDllNameByVersion(v: Integer): String;
@@ -71,50 +76,50 @@ begin
 end;
 
 function TDynamicDLLWithVersion.LoadDll: Boolean;
-var
-  ThisIsEssential: Boolean;
 begin
   if DllName <> '' then begin
     Result := Inherited;
   end else begin
-//    ResolvePaths;
-//    DllName := ''; // workaround a wierd bug
-    Result := False;
-    while DLL_VersionMax >= DLL_VersionMin do begin
-      ThisIsEssential := IsEssential and (DLL_Version = DLL_VersionMin);
-      FatalAbort := ThisIsEssential;
-      FatalMsgDlg := ThisIsEssential;
-      Result := inherited;
-      if Result or (DLL_Version=0) then
-        break
-      else begin
-        DLL_VersionMax := DLL_Version-1;
-        DLL_Version := 0;
-        DllName := '';
-      end;
+    if PrefereFallback then begin
+      Result := LoadDllByVersion(DLL_VersionsFallback);
+      if not Result then
+        Result := LoadDllByVersion(DLL_VersionsSupported);
+    end else begin
+      Result := LoadDllByVersion(DLL_VersionsSupported);
+      if not Result then
+        Result := LoadDllByVersion(DLL_VersionsFallback);
+    end;
+    if not Result then
+      Result := LoadDllByVersion(DLL_VersionsSpeculated);
+  end;
+end;
+
+function TDynamicDLLWithVersion.LoadDllByVersion(Versions: TList): Boolean;
+var
+  i, v: Integer;
+  ThisIsEssential: Boolean;
+begin
+  Result := False;
+  for i := 0 to Versions.Count-1 do begin
+    v := Integer(Versions[i]);
+    ThisIsEssential := IsEssential and (i=Versions.Count-1);
+    FatalAbort := ThisIsEssential;
+    FatalMsgDlg := ThisIsEssential;
+    DllName := GetDllNameByVersion(v);
+    Result := inherited LoadDll;
+    if Result then begin
+      DLL_Version := v;
+      break;
+    end
+    else begin
+      DllName := '';
     end;
   end;
 end;
 
 function TDynamicDLLWithVersion.ResolvePaths: Boolean;
-var
-  v: Integer;
-  DLLName1: String;
 begin
-  Result := DLL_Version<>0;
-  if Result then exit;
-
-  if (FDllPath = '') then exit;
-  if not DirectoryExists(FDllPath) then exit;
-  DllPath := IncludeTrailingPathDelimiter(DllPath);
-  for v := DLL_VersionMax downto DLL_VersionMin do begin
-    DLLName1 := GetDllNameByVersion(v);
-    Result := FileExists(DllPath + DLLName1);
-    if Result then begin
-      DLL_Version := v;
-      exit;
-    end;
-  end;
+  Result := (DllPath<>'') and FileExists(DllFullFileName);
 end;
 
 end.
