@@ -113,6 +113,7 @@ type
     function IsRegVersionStored: Boolean;
     procedure SetDllName(const Value: String); virtual;
     procedure SetDllPath(const Value: String); virtual;
+    function GetDllName: String; virtual;
   protected
     FDllName            : String;
     FDllPath            : String;
@@ -136,7 +137,7 @@ type
     procedure AfterLoad; virtual;
     procedure BeforeUnload; virtual;
     function  GetQuitMessage : String; virtual;
-    procedure DoOpenDll(const aDllName : String); virtual;
+    procedure DoOpenDll(aDllName : String); virtual;
     function  GetDllPath : String; virtual;
     procedure MapDll; virtual; abstract;
 
@@ -159,7 +160,7 @@ type
   published
     property AutoLoad : Boolean read FAutoLoad write FAutoLoad default True;
     property AutoUnload : Boolean read FAutoUnload write FAutoUnload default True;
-    property DllName : String read FDllName write SetDllName stored IsDllNameStored;
+    property DllName : String read GetDllName write SetDllName stored IsDllNameStored;
     property DllPath : String read FDllPath write SetDllPath;
     property DllFullFileName : String read GetDllFullFileName;
     property APIVersion : Integer read FAPIVersion write FAPIVersion stored IsAPIVersionStored;
@@ -180,18 +181,20 @@ implementation
 (**                                                   **)
 (*******************************************************)
 
-procedure TDynamicDll.DoOpenDll(const aDllName : String);
+procedure TDynamicDll.DoOpenDll(aDllName : String);
 begin
   if not IsHandleValid then
   begin
-    if aDllName<>'' then
-      FDllName := aDllName;
+    if aDllName='' then
+      aDllName := DllName;
+    if aDllName='' then
+      exit;
     SetDllDirectory(PChar(GetDllPath));
     FDLLHandle := SafeLoadLibrary(
       {$IFDEF FPC}
-        PAnsiChar(AnsiString(DllName))
+        PAnsiChar(AnsiString(aDllName))
       {$ELSE}
-        GetDllPath+DllName
+        GetDllPath+aDllName
       {$ENDIF}
     );
   end;
@@ -200,6 +203,11 @@ end;
 function TDynamicDll.GetDllFullFileName: String;
 begin
   Result := DllPath + DllName;
+end;
+
+function TDynamicDll.GetDllName: String;
+begin
+  Result := FDllName;
 end;
 
 function  TDynamicDll.GetDllPath : String;
