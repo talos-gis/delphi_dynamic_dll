@@ -119,6 +119,7 @@ type
     FDllPath            : String;
     FAPIVersion         : Integer;
     FRegVersion         : String;
+    FLastError          : String;
     FAutoLoad           : Boolean;
     FAutoUnload         : Boolean;
     FFatalMsgDlg        : Boolean;
@@ -130,8 +131,8 @@ type
     FOnBeforeUnload     : TNotifyEvent;
 
     procedure CallMapDll; virtual;
-    function  Import(const funcname: String; canFail: Boolean = True): Pointer;
-    function  Import2(funcname: String; args: integer=-1; canFail: Boolean = True): Pointer;
+    function  Import(const funcname: String; ExceptionOnFailure: Boolean = True): Pointer;
+    function  Import2(funcname: String; args: integer=-1; ExceptionOnFailure: Boolean = True): Pointer;
     procedure Loaded; override;
     procedure BeforeLoad; virtual;
     procedure AfterLoad; virtual;
@@ -163,6 +164,7 @@ type
     property DllName : String read GetDllName write SetDllName stored IsDllNameStored;
     property DllPath : String read GetDllPath write SetDllPath;
     property DllFullFileName : String read GetDllFullFileName;
+    property LastError : String read FLastError;
     property APIVersion : Integer read FAPIVersion write FAPIVersion stored IsAPIVersionStored;
     property RegVersion : String read FRegVersion write FRegVersion stored IsRegVersionStored;
     property FatalAbort :  Boolean read FFatalAbort write FFatalAbort default True;
@@ -216,8 +218,6 @@ begin
 end;
 
 procedure  TDynamicDll.OpenDll(const aDllName : String);
-var
-  s : String;
 begin
   UnloadDll;
 
@@ -229,17 +229,17 @@ begin
 
   if not IsHandleValid then begin
 {$IFDEF MSWINDOWS}
-    s := Format('Error %d: Could not open Dll "%s"',[GetLastError, DllName]);
+    FLastError := Format('Error %d: Could not open Dll "%s"',[GetLastError, DllName]);
 {$ENDIF}
 {$IFDEF LINUX}
-    s := Format('Error: Could not open Dll "%s"',[DllName]);
+    FLastError := Format('Error: Could not open Dll "%s"',[DllName]);
 {$ENDIF}
     if FatalMsgDlg then
 {$IFDEF MSWINDOWS}
-      MessageBox( GetActiveWindow, PChar(s), 'Error', MB_TASKMODAL or MB_ICONSTOP );
+      MessageBox( GetActiveWindow, PChar(FLastError), 'Error', MB_TASKMODAL or MB_ICONSTOP );
 {$ENDIF}
 {$IFDEF LINUX}
-      WriteLn(ErrOutput, s);
+      WriteLn(ErrOutput, FLastError);
 {$ENDIF}
 
     if FatalAbort then
@@ -265,12 +265,12 @@ begin
   inherited;
 end;
 
-function TDynamicDll.Import(const funcname: String; canFail: Boolean): Pointer;
+function TDynamicDll.Import(const funcname: String; ExceptionOnFailure: Boolean): Pointer;
 var
   E : EDllImportError;
 begin
   Result := GetProcAddress( FDLLHandle, PChar(funcname) );
-  if (Result = nil) and canFail then begin
+  if (Result = nil) and ExceptionOnFailure then begin
     {$IFDEF MSWINDOWS}
     E := EDllImportError.CreateFmt('Error %d: could not map symbol "%s"', [GetLastError, funcname]);
     E.ErrorCode := GetLastError;
@@ -282,7 +282,7 @@ begin
   end;
 end;
 
-function TDynamicDll.Import2(funcname: String; args: integer; canFail: Boolean): Pointer;
+function TDynamicDll.Import2(funcname: String; args: integer; ExceptionOnFailure: Boolean): Pointer;
 begin
   {$IFDEF WIN32}
   // using STDCall name decoration
@@ -290,7 +290,7 @@ begin
   if args>=0 then
     funcname := '_'+funcname+'@'+IntToStr(args);
   {$ENDIF}
-  Result := Import(funcname, canFail);
+  Result := Import(funcname, ExceptionOnFailure);
 end;
 
 procedure TDynamicDll.Loaded;

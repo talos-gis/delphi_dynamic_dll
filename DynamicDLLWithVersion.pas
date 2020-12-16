@@ -20,7 +20,7 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     function LoadDll: Boolean; override;
-    function LoadDllByVersion(Versions: TList): Boolean;
+    function LoadDllByVersion(Versions: TList; CurrentIsEssential: Boolean=False): Boolean;
     function GetDLL_Version_Major(v: Integer): Integer; virtual;
     function GetDLL_Version_Minor(v: Integer): Integer; virtual;
   protected
@@ -30,6 +30,8 @@ type
   end;
 
 implementation
+
+uses Windows;
 
 { TDynamicDLLWithVersion }
 
@@ -44,6 +46,7 @@ begin
   PrefereFallback := False;
   DLL_Version_MajorMod := 100;
   IsEssential := True;
+  FatalAbort := False;
 end;
 
 destructor TDynamicDLLWithVersion.Destroy;
@@ -76,6 +79,8 @@ begin
 end;
 
 function TDynamicDLLWithVersion.LoadDll: Boolean;
+var
+  LastError: String;
 begin
   if DllName <> '' then begin
     Result := Inherited;
@@ -91,10 +96,14 @@ begin
     end;
     if not Result then
       Result := LoadDllByVersion(DLL_VersionsSpeculated);
+    if not Result and IsEssential then begin
+      LastError := Format('Error %d: Could not open Dll "%s" (any supported version)',[GetLastError, DLL_Base_Name]);
+      MessageBox( GetActiveWindow, PChar(LastError), 'Error', MB_TASKMODAL or MB_ICONSTOP );
+    end;
   end;
 end;
 
-function TDynamicDLLWithVersion.LoadDllByVersion(Versions: TList): Boolean;
+function TDynamicDLLWithVersion.LoadDllByVersion(Versions: TList; CurrentIsEssential: Boolean): Boolean;
 var
   i, v: Integer;
   ThisIsEssential: Boolean;
@@ -102,8 +111,7 @@ begin
   Result := False;
   for i := 0 to Versions.Count-1 do begin
     v := Integer(Versions[i]);
-    ThisIsEssential := IsEssential and (i=Versions.Count-1);
-    FatalAbort := ThisIsEssential;
+    ThisIsEssential := CurrentIsEssential and (i=Versions.Count-1);
     FatalMsgDlg := ThisIsEssential;
     DllName := GetDllNameByVersion(v);
     Result := inherited LoadDll;
